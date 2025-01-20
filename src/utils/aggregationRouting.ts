@@ -46,15 +46,15 @@ function formatRoutesV2(routes: SwapRoute[]): SwapRouteV2[] {
     let itemIndex = -1
     const routesGroup = routes.reduce((a, b) => {
       let index: number
-      let subRoutes: any[][] = []
+      let subRoutes: SwapPool[][] = []
       let swapPercentage: number = (b.pools && b.pools[0]?.swapPercentage) || 0
       if (a[b.slug]) {
         const route: any = a[b.slug] || {}
         index = route.index
         const temp = route.subRoutes || []
         swapPercentage += route.swapPercentage || 0
-        temp.forEach((sub: any[], ind: number) => {
-          const swapPool: any = (b.pools && b.pools[ind]) || ({} as any)
+        temp.forEach((sub: SwapPool[], ind: number) => {
+          const swapPool: SwapPool = (b.pools && b.pools[ind]) || ({} as any)
           const totalSwapAmount = JSBI.add(
             sub.reduce((sum, x2) => JSBI.add(sum, x2.swapAmount || ZERO), ZERO),
             swapPool.swapAmount || ZERO,
@@ -116,22 +116,72 @@ function formatRoutesV2(routes: SwapRoute[]): SwapRouteV2[] {
   }
 }
 
+export interface SwapRouteV3 {
+  tokenIn: PathItem
+  tokenOut: PathItem
+  pool: string
+  swapAmount: string
+  amountOut: string
+  exchange: string
+  depth: number
+}
+
 export function getTradeComposition(
   chainId: ChainId,
   inputAmount: CurrencyAmount<Currency> | undefined,
   involvingTokens: { [address: string]: Token | undefined } | undefined,
   swaps: Swap[][] | undefined,
   allTokens: { [address: string]: Token } | undefined,
-): SwapRouteV2[] | undefined {
+): SwapRouteV2[] | SwapRouteV3[] | undefined {
   if (!inputAmount || !swaps) {
     return undefined
   }
 
   const inputTokenAmount = inputAmount.wrapped
-  const tokens = involvingTokens || ({} as any)
+  const tokens = involvingTokens || {}
   const defaultToken = new Token(chainId, WETH[chainId].address, 0, '--', '--')
   const routes: SwapRoute[] = []
 
+  const getTokenFromAddress = (address: string): PathItem => {
+    if (address.toLowerCase() === ETHER_ADDRESS.toLowerCase()) {
+      return NativeCurrencies[chainId].wrapped
+    }
+
+    return (
+      allTokens?.[isAddressString(address)] ||
+      tokens[address] ||
+      (isAddressString(address) ? new Token(chainId, isAddressString(address), 0, '--', '--') : defaultToken)
+    )
+  }
+
+  if (swaps.every(swap => swap.length === 1)) {
+    const tokenIn = inputAmount.currency.wrapped.address
+    const swapsWithDepth = swaps.map(s => ({
+      ...s[0],
+      depth: s[0].tokenIn.toLowerCase() === tokenIn.toLowerCase() ? 1 : -1,
+    }))
+
+    let currentLevel = 1
+    while (swapsWithDepth.some(m => m.depth === -1)) {
+      const nextInputs = swapsWithDepth.filter(s => s.depth === currentLevel).map(item => item.tokenOut)
+
+      for (const inputToken of nextInputs) {
+        for (let i = 0; i < swapsWithDepth.length; i++) {
+          if (swapsWithDepth[i].depth !== -1) continue
+          if (swapsWithDepth[i].tokenIn.toLowerCase() === inputToken.toLowerCase()) {
+            swapsWithDepth[i].depth = currentLevel + 1
+          }
+        }
+      }
+      currentLevel++
+    }
+
+    return swapsWithDepth.map(swap => ({
+      ...swap,
+      tokenIn: getTokenFromAddress(swap.tokenIn),
+      tokenOut: getTokenFromAddress(swap.tokenOut),
+    }))
+  }
   const calcSwapPercentage = function (tokenIn: string, amount: string): number | undefined {
     if (!tokenIn || !amount) {
       return undefined
@@ -142,18 +192,6 @@ export function getTradeComposition(
       return parseInt(percent)
     }
     return undefined
-  }
-
-  const getTokenFromAddress = (address: string) => {
-    if (address.toLowerCase() === ETHER_ADDRESS.toLowerCase()) {
-      return NativeCurrencies[chainId]
-    }
-
-    return (
-      allTokens?.[isAddressString(address)] ||
-      tokens[address] ||
-      (isAddressString(address) ? new Token(chainId, isAddressString(address), 0, '--', '--') : defaultToken)
-    )
   }
 
   // Convert all Swaps to ChartSwaps

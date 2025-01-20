@@ -36,7 +36,7 @@ const routeApi = createApi({
         const { routeSummary } = baseResponse?.data || {}
         const { chainId, tokenInDecimals, tokenOutDecimals, tokenIn, tokenOut } = params || {}
 
-        // Ensure all necessary data is available
+        //Ensure all necessary data is available
         if (baseResponse?.data?.routeSummary && routeSummary && chainId && tokenInDecimals && tokenOutDecimals) {
           const { amountIn, amountOut } = routeSummary
 
@@ -74,7 +74,7 @@ const routeApi = createApi({
           }
         }
 
-        // Return original response if conditions are not met or request fails
+        //Return original response if conditions are not met or request fails
         return baseResponse
       },
     }),
