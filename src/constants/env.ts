@@ -48,6 +48,8 @@ export const WALLETCONNECT_PROJECT_ID = required('WALLETCONNECT_PROJECT_ID')
 export const CAMPAIGN_URL = required('CAMPAIGN_URL')
 export const REFERRAL_URL = required('REFERRAL_URL')
 export const TOKEN_API_URL = required('TOKEN_API_URL')
+export const OAUTH_INTERCEPTOR_URL = required('OAUTH_INTERCEPTOR_API')
+export const AFFILIATE_SERVICE_URL = required('AFFILIATE_SERVICE')
 
 type FirebaseConfig = {
   apiKey: string
